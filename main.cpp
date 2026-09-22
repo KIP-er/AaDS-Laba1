@@ -12,8 +12,6 @@ private:
 	std::size_t _size;
 	T* _data;
 	
-	static constexpr double epsilon = 1e-9;
-	
 	template<typename Engine>
 	T random_value(const T& lower, const T& upper, Engine& engine) {
 		if constexpr (is_complex<T>::value) {
@@ -32,6 +30,8 @@ private:
         }
 	}
 public:
+	static constexpr double epsilon = 1e-9;
+
 	vector(std::size_t size, const T& value): _size(size), _data(new T[size]) {
 		for (std::size_t i = 0; i < size; ++i) {
 			_data[i] = value;
@@ -40,6 +40,16 @@ public:
 	vector(std::size_t size, const T& lower, const T& upper): _size(size), _data(new T[size]) {
 		std::random_device numbers;
 		std::mt19937 engine(numbers());
+		if constexpr (is_complex<T>::value) {
+			if (lower.real() > upper.real() || lower.imag() > upper.imag()) {
+				throw std::invalid_argument("the lower bound exceeds the upper bound");
+			}
+		}
+		else {
+			if (lower > upper) {
+				throw std::invalid_argument("the lower bound exceeds the upper bound");
+			}
+		}
 		for (std::size_t i = 0; i < size; ++i) {
 			_data[i] = random_value(lower, upper, engine);
 		}
@@ -110,7 +120,7 @@ public:
 			return result;
 		}
 		else {
-			throw std::logic_error("the vector dimensions differ.");
+			throw std::logic_error("the vector dimensions differ");
 		}
 	}
 	T operator*(const vector& other) const {
@@ -130,23 +140,25 @@ public:
 			}
 		}
 		else {
-			throw std::logic_error("the vector dimensions differ.");
+			throw std::logic_error("the vector dimensions differ");
 		}
 	}
-	vector operator*(const T& scalar) const {
+	template<typename S>
+	vector operator*(const S& scalar) const {
 		vector result(_size, T{});
 		for (std::size_t i = 0; i < _size; ++i) {
-			result[i] = _data[i] * scalar;
+			result[i] = static_cast<T>(_data[i] * scalar);
 		}
 		return result;
 	}
-	vector operator/(const T& scalar) const {
-		if (scalar == T{}) {
+	template<typename S>
+	vector operator/(const S& scalar) const {
+		if (scalar == S{}) {
 			throw std::invalid_argument("division by zero");
 		}
 		vector result(_size, T{});
 		for (std::size_t i = 0; i < _size; ++i) {
-			result[i] = _data[i] / scalar;
+			result[i] = static_cast<T>(_data[i] / scalar);
 		}
 		return result;
 	}
@@ -172,22 +184,100 @@ public:
 			return true;
 		}
 		else {
-			throw std::logic_error("the vector dimensions differ.");
+			return false;
 		}
 	}
 	bool operator!=(const vector& other) const {
-		if (_size == other._size) {
-			return !(*this == other);
+		return !(*this == other);
+	}
+	std::size_t size() const {
+		return _size;
+	}
+	double length() const {
+		double sum = 0.0;
+		for (std::size_t i = 0; i < _size; ++i) {
+			if constexpr (is_complex<T>::value) {
+				sum = sum + std::norm(_data[i]);
+			}
+			else {
+				sum = sum + static_cast<double>(_data[i])*static_cast<double>(_data[i]);
+			}
 		}
-		else {
-			throw std::logic_error("the vector dimensions differ.");
-		}
+		return std::sqrt(sum);
 	}
 };
 
-template <typename T>
-vector<T> operator*(const T& scalar, const vector<T>& vec) {
+template <typename T, typename S>
+vector<T> operator*(const S& scalar, const vector<T>& vec) {
 	return vec * scalar;
 }
+
+template<typename T>
+std::ostream& operator<<(std::ostream& os, const vector<T>& vec) {
+	os << '[';
+	for (std::size_t i = 0; i < vec.size(); ++i) {
+		if (i != 0) {
+			os << "; ";
+		}
+		os << vec[i];
+	}
+	os << ']';
+	return os;
+}
+
+template<typename T>
+std::enable_if_t<is_complex<T>::value, vector<T>> task(const vector<T>& a, const vector<T>& b) {
+	if (a.size() != b.size()) {
+		throw std::logic_error("the vector dimensions differ.");
+	}
+	double a_len = a.length();
+	double b_len = b.length();
+	if (a_len == 0.0 || b_len == 0.0) {
+		throw std::logic_error("bisector is undefined for zero vector");
+	}
+	vector<T> a1 = a / a_len;
+	vector<T> b1 = b / b_len;
+	vector<T> d = a1 + b1;
+	if (d.length() == 0.0) {
+		throw std::logic_error("bisector is undefined for opposite vectors");
+	}
+	return d;
+}
+
+template<typename T>
+std::enable_if_t<std::is_arithmetic_v<T>, vector<double>> task(const vector<T>& a, const vector<T>& b) {
+	if (a.size() != b.size()) {
+		throw std::logic_error("the vector dimensions differ.");
+	}
+	double a_len = a.length();
+	double b_len = b.length();
+	if (a_len == 0.0 || b_len == 0.0) {
+		throw std::logic_error("bisector is undefined for zero vector");
+	}
+	vector<double> a1(a.size(), 0.0);
+	for (std::size_t i = 0; i < a.size(); ++i) {
+		a1[i] = static_cast<double>(a[i]);
+	}
+	vector<double> b1(b.size(), 0.0);
+	for (std::size_t i = 0; i < b.size(); ++i) {
+		b1[i] = static_cast<double>(b[i]);
+	}
+	vector<double> a2 = a1 / a_len;
+	vector<double> b2 = b1 / b_len;
+	vector<double> d = a2 + b2;
+	if (d.length() == 0.0) {
+		throw std::logic_error("bisector is undefined for opposite vectors");
+	}
+	return d;
+}
+
 int main() {
+	vector<int> a(2, 0);
+	a[0] = 3; a[1] = 4;
+	std::cout << a;
+	vector<int> b(2, 0);
+	b[0] = 9; b[1] = 1;
+	std::cout << b;
+	auto d=task(a, b);
+	std::cout << d;
 }
