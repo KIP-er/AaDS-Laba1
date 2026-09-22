@@ -11,7 +11,9 @@ class vector {
 private:
 	std::size_t _size;
 	T* _data;
-
+	
+	static constexpr double epsilon = 1e-9;
+	
 	template<typename Engine>
 	T random_value(const T& lower, const T& upper, Engine& engine) {
 		if constexpr (is_complex<T>::value) {
@@ -44,6 +46,36 @@ public:
 	}
 	~vector() {
 		delete[] _data;
+	}
+	vector(const vector& other) : _size(other._size) {
+		if (other._data) {
+			_data = new T[_size];
+			for (std::size_t i = 0; i < _size; ++i) {
+				_data[i] = other._data[i];
+			}
+		}
+		else {
+			_data = nullptr;
+			_size = 0;
+		}
+	}
+	vector& operator=(const vector& other) {
+		if (this == &other) {
+			return *this;
+		}
+		delete[] _data;
+		if (other._data) {
+			_size = other._size;
+			_data = new T[_size];
+			for (std::size_t i = 0; i < _size; ++i) {
+				_data[i] = other._data[i];
+			}
+		}
+		else {
+			_data = nullptr;
+			_size = 0;
+		}
+		return *this;
 	}
 	T& operator[](std::size_t index) {
 		if (index >= _size) {
@@ -118,6 +150,39 @@ public:
 		}
 		return result;
 	}
+	bool operator==(const vector& other) const {
+		if (_size == other._size) {
+			for (std::size_t i = 0; i < _size; ++i) {
+				if constexpr (is_complex<T>::value) {
+					if (std::abs(_data[i] - other._data[i]) > epsilon) {
+						return false;
+					}
+				}
+				else if constexpr (std::is_floating_point_v<T>) {
+					if (std::abs(_data[i] - other._data[i]) > epsilon) {
+						return false;
+					}
+				}
+				else {
+					if (_data[i] != other._data[i]) {
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+		else {
+			throw std::logic_error("the vector dimensions differ.");
+		}
+	}
+	bool operator!=(const vector& other) const {
+		if (_size == other._size) {
+			return !(*this == other);
+		}
+		else {
+			throw std::logic_error("the vector dimensions differ.");
+		}
+	}
 };
 
 template <typename T>
@@ -125,5 +190,4 @@ vector<T> operator*(const T& scalar, const vector<T>& vec) {
 	return vec * scalar;
 }
 int main() {
-
 }
